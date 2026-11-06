@@ -1,0 +1,18 @@
+# Local test only: Cowrie listens on 127.0.0.1, never exposed to the network.
+services:
+  cowrie:
+    image: cowrie/cowrie:latest
+    container_name: panal-cowrie
+    ports:
+      - "127.0.0.1:2222:2222"
+    volumes:
+      - cowrie-var:/cowrie/cowrie-git/var
+    cap_drop:
+      - ALL
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"
+
+volumes:
+  cowrie-var:
