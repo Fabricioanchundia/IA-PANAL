@@ -32,19 +32,20 @@ def test_scanner_gets_active_scanning() -> None:
     assert [e.technique for e in evidence_for(0, 0, [])] == ["T1595"]
 
 
-def test_validate_drops_unknown_techniques_and_values() -> None:
-    clean, hallucinated = validate(
+def test_validate_keeps_only_evidence_backed_techniques() -> None:
+    clean, hallucinated, unsupported = validate(
         {
             "category": "alien",
             "severity": "apocalyptic",
-            "techniques": ["T1496", "T9999", "t1105"],
+            "techniques": ["T1496", "T9999", "t1059.004"],
             "summary": " ok ",
             "recommendations": ["a"],
         },
         evidence_ids=["T1059.004"],
     )
     assert hallucinated == ["T9999"]
-    assert clean["techniques"] == ["T1059.004", "T1496", "T1105"]
+    assert unsupported == ["T1496"]
+    assert clean["techniques"] == ["T1059.004"]
     assert (clean["category"], clean["severity"], clean["summary"]) == ("other", "medium", "ok")
 
 
@@ -78,6 +79,7 @@ def test_full_analysis_and_report(con) -> None:
     report = render_report(a)
 
     assert a["hallucinated"] == ["T1234"]
+    assert a["unsupported"] == []
     assert "T1070.003" in a["techniques"]  # history -c, found by rules
     assert "| T1496 | Resource Hijacking | Impact |" in report
     assert "SHA-256: `" + "a" * 64 + "`" in report
