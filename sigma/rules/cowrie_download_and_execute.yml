@@ -1,0 +1,33 @@
+title: Download and Execute in One Session
+id: 985b4b05-d086-4f8b-b031-c71327dc4609
+status: experimental
+description: A file is fetched with wget/curl/tftp and then made executable, typical of bot droppers.
+references:
+    - https://github.com/Fabricioanchundia/IA-PANAL
+author: Fabricio Anchundia
+date: 2026-11-07
+tags:
+    - attack.command-and-control
+    - attack.t1105
+    - attack.defense-evasion
+    - attack.t1222.002
+logsource:
+    product: cowrie
+    service: ssh
+detection:
+    selection_download:
+        eventid: cowrie.command.input
+        input|contains:
+            - 'wget '
+            - 'curl '
+            - 'tftp '
+            - 'ftpget '
+    selection_exec:
+        input|contains:
+            - 'chmod +x'
+            - 'chmod 777'
+            - 'chmod 755'
+    condition: selection_download and selection_exec
+falsepositives:
+    - Legitimate install one-liners typed by an administrator
+level: high

@@ -1,0 +1,26 @@
+title: Shell History Cleared
+id: 12977343-36cd-4afc-8f1d-fb1c09e83c68
+status: experimental
+description: Attacker tries to erase traces of the commands they ran.
+references:
+    - https://github.com/Fabricioanchundia/IA-PANAL
+author: Fabricio Anchundia
+date: 2026-11-07
+tags:
+    - attack.defense-evasion
+    - attack.t1070.003
+logsource:
+    product: cowrie
+    service: ssh
+detection:
+    selection:
+        eventid: cowrie.command.input
+        input|contains:
+            - 'history -c'
+            - '.bash_history'
+            - 'unset HISTFILE'
+            - 'HISTFILE=/dev/null'
+    condition: selection
+falsepositives:
+    - Users cleaning their own history
+level: medium

@@ -1,0 +1,29 @@
+title: Cryptocurrency Miner Activity on SSH Honeypot
+id: cda048c2-3e78-413c-b95c-8bedd4522787
+status: experimental
+description: Attacker downloads, configures or runs a cryptocurrency miner after logging in.
+references:
+    - https://github.com/Fabricioanchundia/IA-PANAL
+author: Fabricio Anchundia
+date: 2026-11-07
+tags:
+    - attack.impact
+    - attack.t1496
+logsource:
+    product: cowrie
+    service: ssh
+detection:
+    selection:
+        eventid: cowrie.command.input
+        input|contains:
+            - xmrig
+            - minerd
+            - 'stratum+tcp://'
+            - 'stratum+ssl://'
+            - cryptonight
+            - c3pool
+            - nicehash
+    condition: selection
+falsepositives:
+    - Administrators benchmarking miners on their own hosts (not expected on a honeypot)
+level: high
