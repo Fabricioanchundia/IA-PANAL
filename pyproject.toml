@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "Cloud honeypot with an AI SOC analyst"
 readme = "README.md"
 requires-python = ">=3.12"
-dependencies = ["duckdb>=1.4", "maxminddb>=2.6", "pyyaml>=6.0"]
+dependencies = ["duckdb>=1.4", "maxminddb>=2.6", "pyyaml>=6.0", "pycountry>=24.6"]
 
 [dependency-groups]
 dev = ["pytest>=8", "ruff>=0.14", "pysigma>=0.11"]

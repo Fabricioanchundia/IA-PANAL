@@ -228,3 +228,7 @@ crash.log
 
 # Honeypot data (attacker IPs, passwords) stays local
 data/
+
+# Public dashboard data: aggregates only, no IPs
+!site/data/
+!/site/
