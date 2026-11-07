@@ -44,7 +44,7 @@ INJECTION_PATTERNS = [
     r"(classify|mark|rate|label|report|clasifica|marca)\W{0,3}(this|it|the|esta|la)?\W{0,3}"
     r"(session|sesi[oó]n|activity)?\W{0,3}(as|como)\b",
     r"\b(severity|severidad|category|categor[ií]a)\W{0,4}(low|none|baja|benign|scan)",
-    r"\b(benign|harmless|authori[sz]ed|benigna|inofensiv)",
+    r"\b(benign|harmless|authori[sz]ed\b|benigna|inofensiv)",  # not authorized_keys
     r"\b(ai|llm|gpt|analyst|analista)\b.{0,30}\b(note|instruction|must|should|debe)",
     r"untrusted_session_data",
     r"\bDAN\b|jailbreak",

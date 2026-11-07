@@ -14,6 +14,8 @@ def test_normal_commands_are_not_flagged() -> None:
         "echo 'root:Xk92hd!' | chpasswd",
         "ps aux | grep -v grep | grep xmrig",
         "crontab -l",
+        "echo 'ssh-rsa AAAA attacker@box' >> ~/.ssh/authorized_keys",
+        "chmod 600 .ssh/authorized_keys",
     ]
     assert detect_injection(normal) == []
 

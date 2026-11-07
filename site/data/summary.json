@@ -1,0 +1,254 @@
+{
+ "generated_at": "2026-11-07T23:52:44Z",
+ "period": {
+  "start": "2026-11-07",
+  "end": "2026-11-07"
+ },
+ "last_attack_at": "2026-11-07T18:16:00Z",
+ "totals": {
+  "sessions": 9,
+  "unique_ips": 6,
+  "countries": 3,
+  "login_attempts": 0,
+  "sessions_with_shell": 0,
+  "sigma_hits": 0,
+  "ai_injection_attempts": 0
+ },
+ "countries": [
+  {
+   "code": "US",
+   "numeric": "840",
+   "name": "United States",
+   "sessions": 5,
+   "ips": 4
+  },
+  {
+   "code": "UA",
+   "numeric": "804",
+   "name": "Ukraine",
+   "sessions": 2,
+   "ips": 1
+  },
+  {
+   "code": "BR",
+   "numeric": "076",
+   "name": "Brazil",
+   "sessions": 2,
+   "ips": 1
+  }
+ ],
+ "daily": [
+  {
+   "date": "2026-11-07",
+   "sessions": 9
+  }
+ ],
+ "hourly": [
+  {
+   "hour": "2026-11-07T13",
+   "sessions": 2
+  },
+  {
+   "hour": "2026-11-07T15",
+   "sessions": 3
+  },
+  {
+   "hour": "2026-11-07T16",
+   "sessions": 1
+  },
+  {
+   "hour": "2026-11-07T17",
+   "sessions": 1
+  },
+  {
+   "hour": "2026-11-07T18",
+   "sessions": 2
+  }
+ ],
+ "funnel": {
+  "connected": 9,
+  "tried_login": 0,
+  "got_shell": 0,
+  "ran_commands": 0,
+  "tried_download": 0
+ },
+ "recent": [
+  {
+   "time": "2026-11-07T18:16:00Z",
+   "country_code": "BR",
+   "category": "scan",
+   "severity": "low",
+   "by": "rules",
+   "techniques": [
+    "T1595"
+   ],
+   "client": "Unknown",
+   "logins": 0,
+   "commands": 0,
+   "injection": false,
+   "country": "Brazil"
+  },
+  {
+   "time": "2026-11-07T18:16:00Z",
+   "country_code": "BR",
+   "category": "scan",
+   "severity": "low",
+   "by": "rules",
+   "techniques": [
+    "T1595"
+   ],
+   "client": "Unknown",
+   "logins": 0,
+   "commands": 0,
+   "injection": false,
+   "country": "Brazil"
+  },
+  {
+   "time": "2026-11-07T17:36:00Z",
+   "country_code": "US",
+   "category": "scan",
+   "severity": "low",
+   "by": "rules",
+   "techniques": [
+    "T1595"
+   ],
+   "client": "ZGrab",
+   "logins": 0,
+   "commands": 0,
+   "injection": false,
+   "country": "United States"
+  },
+  {
+   "time": "2026-11-07T16:47:00Z",
+   "country_code": "US",
+   "category": "scan",
+   "severity": "low",
+   "by": "rules",
+   "techniques": [
+    "T1595"
+   ],
+   "client": "Unknown",
+   "logins": 0,
+   "commands": 0,
+   "injection": false,
+   "country": "United States"
+  },
+  {
+   "time": "2026-11-07T15:49:00Z",
+   "country_code": "US",
+   "category": "scan",
+   "severity": "low",
+   "by": "rules",
+   "techniques": [
+    "T1595"
+   ],
+   "client": "Unknown",
+   "logins": 0,
+   "commands": 0,
+   "injection": false,
+   "country": "United States"
+  },
+  {
+   "time": "2026-11-07T15:46:00Z",
+   "country_code": "US",
+   "category": "scan",
+   "severity": "low",
+   "by": "rules",
+   "techniques": [
+    "T1595"
+   ],
+   "client": "ZGrab",
+   "logins": 0,
+   "commands": 0,
+   "injection": false,
+   "country": "United States"
+  },
+  {
+   "time": "2026-11-07T15:40:00Z",
+   "country_code": "US",
+   "category": "scan",
+   "severity": "low",
+   "by": "rules",
+   "techniques": [
+    "T1595"
+   ],
+   "client": "Unknown",
+   "logins": 0,
+   "commands": 0,
+   "injection": false,
+   "country": "United States"
+  },
+  {
+   "time": "2026-11-07T13:31:00Z",
+   "country_code": "UA",
+   "category": "scan",
+   "severity": "low",
+   "by": "rules",
+   "techniques": [
+    "T1595"
+   ],
+   "client": "Unknown",
+   "logins": 0,
+   "commands": 0,
+   "injection": false,
+   "country": "Ukraine"
+  },
+  {
+   "time": "2026-11-07T13:30:00Z",
+   "country_code": "UA",
+   "category": "scan",
+   "severity": "low",
+   "by": "rules",
+   "techniques": [
+    "T1595"
+   ],
+   "client": "Unknown",
+   "logins": 0,
+   "commands": 0,
+   "injection": false,
+   "country": "Ukraine"
+  }
+ ],
+ "clients": [
+  {
+   "label": "Unknown",
+   "count": 7
+  },
+  {
+   "label": "ZGrab",
+   "count": 2
+  }
+ ],
+ "reputation": [
+  {
+   "label": "No reports or whitelisted scanner (score 0)",
+   "count": 3
+  },
+  {
+   "label": "Widely reported as malicious (score 50+)",
+   "count": 2
+  },
+  {
+   "label": "Some abuse reports (score 1-49)",
+   "count": 1
+  }
+ ],
+ "top_usernames": [],
+ "top_passwords": [],
+ "top_tools": [],
+ "techniques": [
+  {
+   "id": "T1595",
+   "name": "Active Scanning",
+   "tactic": "Reconnaissance",
+   "sessions": 9
+  }
+ ],
+ "categories": [
+  {
+   "label": "scan",
+   "count": 9
+  }
+ ],
+ "sigma": []
+}

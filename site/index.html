@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panal · Honeypot Attack Map</title>
+<meta name="description" content="Live attacks against an SSH honeypot on AWS, analyzed by a local AI SOC analyst. Aggregated data only.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2l12 7v14l-12 7-12-7V9z' fill='%23e8a317'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f6f5f2; --surface: #fcfcfb; --border: #e4e2dc; --text: #0b0b0b; --text-2: #52514e; --muted: #7a7873;
+    --accent: #b77a00; --grid: #e9e7e1; --land: #e7e5df; --land-stroke: #fcfcfb;
+    --bar: #2a78d6; --bar-hover: #1c5cab;
+    --ramp-1: #86b6ef; --ramp-2: #3987e5; --ramp-3: #1c5cab; --ramp-4: #0d366b;
+    --high: #c2410c; --medium: #a16207; --critical: #b91c1c; --ok: #1baf7a;
+    --radius: 12px; --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #121211; --surface: #1a1a19; --border: #2c2b29; --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8d86;
+      --accent: #e8a317; --grid: #2a2927; --land: #2b2a28; --land-stroke: #1a1a19; --bar: #3987e5; --bar-hover: #6da7ec;
+      --ramp-1: #256abf; --ramp-2: #3987e5; --ramp-3: #6da7ec; --ramp-4: #b7d3f6;
+      --high: #f08a5d; --medium: #e0b33c; --critical: #f87171;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #121211; --surface: #1a1a19; --border: #2c2b29; --text: #f0efec; --text-2: #c3c2b7; --muted: #8f8d86;
+    --accent: #e8a317; --grid: #2a2927; --land: #2b2a28; --land-stroke: #1a1a19; --bar: #3987e5; --bar-hover: #6da7ec;
+    --ramp-1: #256abf; --ramp-2: #3987e5; --ramp-3: #6da7ec; --ramp-4: #b7d3f6;
+    --high: #f08a5d; --medium: #e0b33c; --critical: #f87171;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; }
+  body { background: var(--bg); color: var(--text); font: 14.5px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  .app { max-width: 1280px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  @media (min-width: 900px) and (min-height: 680px) {
+    .app { height: 100dvh; }
+    main { flex: 1; min-height: 0; }
+    .panel { height: 100%; }
+  }
+
+  /* header */
+  .top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 8px; color: var(--accent); font-weight: 750; letter-spacing: .4px; font-size: 15px; }
+  .brand svg { width: 22px; height: 22px; }
+  .live { display: inline-flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--text-2);
+    background: var(--surface); border: 1px solid var(--border); border-radius: 999px; padding: 3px 10px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); animation: pulse 2s infinite; }
+  @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(27,175,122,.55); } 70%, 100% { box-shadow: 0 0 0 7px rgba(27,175,122,0); } }
+  @media (prefers-reduced-motion: reduce) { .dot { animation: none; } }
+  .spacer { flex: 1; }
+  .lang { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .lang button { font: inherit; font-size: 12.5px; font-weight: 600; background: var(--surface); color: var(--text-2);
+    border: 0; padding: 4px 10px; cursor: pointer; }
+  .lang button[aria-pressed="true"] { background: var(--text); color: var(--surface); }
+  h1 { font-size: clamp(20px, 2.6vw, 28px); line-height: 1.2; margin: 0; letter-spacing: -.3px; }
+  .lead { color: var(--text-2); margin: 2px 0 0; font-size: 13.5px; }
+
+  /* KPIs */
+  .kpis { display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+  .kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 8px 12px; }
+  .kpi .v { font-size: 22px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -.3px; }
+  .kpi .l { color: var(--text-2); font-size: 12px; line-height: 1.25; }
+  @media (max-width: 900px) { .kpis { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 520px) { .kpis { grid-template-columns: repeat(2, 1fr); } }
+
+  /* tabs */
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+  .tabs button { font: inherit; font-weight: 600; font-size: 14px; color: var(--text-2); background: none; border: 0;
+    border-bottom: 2px solid transparent; padding: 8px 12px; cursor: pointer; white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+  .tabs button:hover { color: var(--text); }
+  .tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); }
+  .tabs .badge { font-size: 11px; background: var(--high); color: #fff; border-radius: 999px; padding: 0 6px; }
+  .panel { display: grid; gap: 12px; min-height: 0; }
+  .panel[hidden] { display: none; }
+  .p-overview { grid-template-columns: 2fr 1fr; }
+  .p-three { grid-template-columns: repeat(3, 1fr); grid-auto-rows: minmax(0, 1fr); }
+  .p-two { grid-template-columns: repeat(2, 1fr); grid-auto-rows: minmax(0, 1fr); }
+  .p-one { grid-template-columns: 1fr; }
+  @media (max-width: 900px) { .p-overview, .p-three, .p-two { grid-template-columns: 1fr; grid-auto-rows: auto; } }
+
+  /* cards */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px;
+    display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .card h2 { font-size: 14.5px; margin: 0; }
+  .card .sub { color: var(--muted); font-size: 12.5px; margin: 0 0 10px; }
+  .card .body { flex: 1; min-height: 0; overflow: auto; }
+  .split { display: grid; grid-template-rows: auto auto; gap: 12px; min-height: 0; }
+
+  #map { flex: 1; min-height: 220px; }
+  #map svg { width: 100%; height: 100%; display: block; }
+  .country { stroke: var(--land-stroke); stroke-width: .5; }
+  .country:hover { stroke: var(--text); stroke-width: 1; }
+  .legend { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .legend .scale { display: flex; height: 9px; width: 140px; border-radius: 3px; overflow: hidden; }
+  .legend .scale span { flex: 1; }
+
+  .bars { display: grid; gap: 7px; }
+  .bar-row { display: grid; grid-template-columns: minmax(0, 40%) 1fr auto; gap: 10px; align-items: center; font-size: 13px; }
+  .bar-row .lab { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bar-row .lab code { font: 12.5px var(--mono); }
+  .bar-row .track { height: 11px; }
+  .bar-row .fill { display: block; height: 100%; background: var(--bar); border-radius: 0 4px 4px 0; min-width: 2px; }
+  .bar-row:hover .fill { background: var(--bar-hover); }
+  .bar-row .num { font-variant-numeric: tabular-nums; color: var(--text-2); text-align: right; min-width: 2.5ch; }
+  .bars.stacked .bar-row { grid-template-columns: 1fr auto; row-gap: 3px; }
+  .bars.stacked .bar-row .lab { grid-column: 1 / -1; white-space: normal; }
+  .pill { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 0 6px; border-radius: 999px; border: 1px solid currentColor; margin-left: 6px; text-transform: uppercase; }
+  .pill.high { color: var(--high); } .pill.medium { color: var(--medium); }
+
+  .funnel { display: grid; gap: 10px; }
+  .step .row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 3px; }
+  .step .row b { font-variant-numeric: tabular-nums; }
+  .step .track { height: 12px; background: var(--grid); border-radius: 4px; overflow: hidden; }
+  .step .fill { height: 100%; background: var(--bar); border-radius: 0 4px 4px 0; }
+  .pct { color: var(--muted); font-size: 12px; }
+
+  .filters { display: flex; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .filters button { font: inherit; font-size: 12.5px; color: var(--text-2); background: transparent;
+    border: 1px solid var(--border); border-radius: 999px; padding: 3px 11px; cursor: pointer; }
+  .filters button[aria-pressed="true"] { color: var(--text); border-color: var(--text); font-weight: 600; }
+  .item { display: grid; grid-template-columns: 90px 1fr; gap: 10px; padding: 9px 0; border-top: 1px solid var(--border); }
+  .item:first-child { border-top: 0; }
+  .when { color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; padding-top: 1px; }
+  .what { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+  .what .cat { font-weight: 650; }
+  .what .where { color: var(--text-2); font-size: 13px; }
+  .sev { display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .4px;
+    padding: 0 7px; border-radius: 999px; border: 1px solid currentColor; text-transform: uppercase; }
+  .sev.low { color: var(--muted); } .sev.medium { color: var(--medium); } .sev.high { color: var(--high); } .sev.critical { color: var(--critical); }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 5px; grid-column: 2; }
+  .chip { font: 11.5px var(--mono); color: var(--text-2); background: var(--bg); border: 1px solid var(--border); padding: 0 6px; border-radius: 5px; }
+  .chip.t { font-family: inherit; }
+  .chip.warn { color: var(--high); border-color: currentColor; font-family: inherit; font-weight: 600; }
+  @media (max-width: 520px) { .item { grid-template-columns: 1fr; gap: 3px; } .chips { grid-column: 1; } }
+
+  #timeline { flex: 1; min-height: 200px; }
+  #timeline svg { display: block; }
+  .axis text { fill: var(--muted); font-size: 11px; }
+  .axis line, .axis path { stroke: var(--grid); }
+  .col { fill: var(--bar); } .col:hover { fill: var(--bar-hover); }
+
+  .about { max-width: 760px; color: var(--text-2); }
+  .about h3 { color: var(--text); font-size: 14px; margin: 14px 0 4px; }
+  .about h3:first-child { margin-top: 0; }
+  .about ul { margin: 0; padding-left: 18px; }
+  .about a { color: inherit; }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  .foot { color: var(--muted); font-size: 12px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .foot a { color: inherit; }
+  .tip { position: fixed; pointer-events: none; background: var(--text); color: var(--surface); font-size: 12.5px;
+    padding: 6px 9px; border-radius: 6px; opacity: 0; transition: opacity .1s; z-index: 10; max-width: 280px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="top">
+      <div class="brand"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2l12 7v14l-12 7-12-7V9z" fill="currentColor"/></svg>PANAL</div>
+      <div class="live" id="live" hidden><span class="dot" aria-hidden="true"></span><span id="live-text"></span></div>
+      <div class="spacer"></div>
+      <div class="lang" role="group" aria-label="Language">
+        <button type="button" data-lang="es">ES</button><button type="button" data-lang="en">EN</button>
+      </div>
+    </div>
+    <h1 data-i="title"></h1>
+    <p class="lead" data-i="lead"></p>
+  </header>
+
+  <section class="kpis" id="kpis" aria-label="Key numbers"></section>
+
+  <nav class="tabs" role="tablist" id="tabs"></nav>
+
+  <main>
+    <section class="panel p-overview" id="p-overview" role="tabpanel">
+      <div class="card">
+        <h2 data-i="mapTitle"></h2><p class="sub" data-i="mapSub"></p>
+        <div id="map"></div><div class="legend" id="legend"></div>
+      </div>
+      <div class="split">
+        <div class="card"><h2 data-i="funnelTitle"></h2><p class="sub" data-i="funnelSub"></p><div class="body funnel" id="funnel"></div></div>
+        <div class="card"><h2 data-i="countriesTitle"></h2><p class="sub" data-i="countriesSub"></p><div class="body bars" id="countries"></div></div>
+      </div>
+    </section>
+
+    <section class="panel p-one" id="p-feed" role="tabpanel" hidden>
+      <div class="card">
+        <h2 data-i="feedTitle"></h2><p class="sub" data-i="feedSub"></p>
+        <div class="filters" role="group" id="filters">
+          <button type="button" data-f="serious"></button><button type="button" data-f="all"></button>
+        </div>
+        <div class="body" id="recent"></div>
+      </div>
+    </section>
+
+    <section class="panel p-three" id="p-attackers" role="tabpanel" hidden>
+      <div class="card"><h2 data-i="repTitle"></h2><p class="sub" data-i="repSub"></p><div class="body bars stacked" id="reputation"></div></div>
+      <div class="card"><h2 data-i="clientsTitle"></h2><p class="sub" data-i="clientsSub"></p><div class="body bars" id="clients"></div></div>
+      <div class="card"><h2 data-i="typesTitle"></h2><p class="sub" data-i="typesSub"></p><div class="body bars" id="categories"></div></div>
+      <div class="card"><h2 data-i="pwTitle"></h2><p class="sub" data-i="botSub"></p><div class="body bars" id="passwords"></div></div>
+      <div class="card"><h2 data-i="userTitle"></h2><p class="sub" data-i="botSub"></p><div class="body bars" id="usernames"></div></div>
+      <div class="card"><h2 data-i="toolsTitle"></h2><p class="sub" data-i="toolsSub"></p><div class="body bars" id="tools"></div></div>
+    </section>
+
+    <section class="panel p-two" id="p-detect" role="tabpanel" hidden>
+      <div class="card"><h2 data-i="mitreTitle"></h2><p class="sub" data-i="mitreSub"></p><div class="body bars stacked" id="techniques"></div></div>
+      <div class="card"><h2 data-i="sigmaTitle"></h2><p class="sub" data-i="sigmaSub"></p><div class="body bars stacked" id="sigma"></div></div>
+    </section>
+
+    <section class="panel p-one" id="p-activity" role="tabpanel" hidden>
+      <div class="card"><h2 data-i="timeTitle"></h2><p class="sub" id="timeline-sub"></p><div id="timeline"></div></div>
+    </section>
+
+    <section class="panel p-one" id="p-about" role="tabpanel" hidden>
+      <div class="card"><div class="body about" id="about"></div></div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <span id="meta"></span>
+    <a href="https://github.com/Fabricioanchundia/IA-PANAL">GitHub</a>
+    <a href="https://db-ip.com">IP Geolocation by DB-IP</a>
+  </footer>
+</div>
+<div class="tip" id="tip" role="tooltip"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+<script>
+const T = {
+  en: {
+    title: "Who attacks a fresh server on the internet?",
+    lead: "A decoy SSH server on AWS records every attack. A local AI SOC analyst classifies each one and maps it to MITRE ATT&CK.",
+    live: (a) => `Honeypot collecting · last attack ${a}`,
+    kpi: { sessions: "Attack sessions", unique_ips: "Unique IPs", countries: "Countries", login_attempts: "Login attempts",
+      sessions_with_shell: "Got a (fake) shell", sigma_hits: "Sigma alerts", ai_injection_attempts: "Tried to fool the AI" },
+    tabs: { overview: "Overview", feed: "Live attacks", attackers: "Attackers", detect: "Detection", activity: "Activity", about: "About" },
+    mapTitle: "Where attacks come from", mapSub: "Sessions by country (IP geolocation). Hover a country.",
+    funnelTitle: "How far did they get?", funnelSub: "Every session, step by step",
+    countriesTitle: "Top countries", countriesSub: "Sessions",
+    feedTitle: "Live attacks", feedSub: "Latest sessions, classified by the AI analyst or by rules. No IPs shown.",
+    serious: "Serious only", all: "All",
+    repTitle: "Who are they?", repSub: "Attacker IPs by AbuseIPDB reputation",
+    clientsTitle: "Attack tools", clientsSub: "Software the bots used to connect",
+    typesTitle: "Attack types", typesSub: "Sessions by verdict",
+    pwTitle: "Most tried passwords", userTitle: "Most tried usernames", botSub: "Tried by bots against the decoy",
+    toolsTitle: "Commands they ran", toolsSub: "First program of each command",
+    mitreTitle: "MITRE ATT&CK techniques", mitreSub: "Sessions with evidence for each technique",
+    sigmaTitle: "Sigma detection alerts", sigmaSub: "Hits per rule (rules published in the repo)",
+    timeTitle: "Activity over time", perHour: "Sessions per hour (UTC)", perDay: "Sessions per day (UTC)",
+    funnel: ["Connected to SSH", "Tried a password", "Got a (fake) shell", "Ran commands", "Tried to download malware"],
+    cat: { scan: "Scan", brute_force: "Password guessing", recon: "Reconnaissance", malware_download: "Malware download",
+      cryptominer: "Cryptominer", botnet: "Botnet", persistence: "Persistence", pending_ai_review: "Shell activity", other: "Other" },
+    sev: { low: "low", medium: "medium", high: "high", critical: "critical" },
+    from: (c) => `from ${c}`, logins: (n) => `${n} login${n > 1 ? "s" : ""}`, cmds: (n) => `${n} command${n > 1 ? "s" : ""}`,
+    byAi: "AI analyst", byRules: "rules", fool: "⚠ tried to fool the AI",
+    ago: (m) => m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`,
+    sessions: "sessions", ips: "unique IPs", noSessions: "No sessions",
+    empty: "No data yet. Bots usually arrive within days.", noSerious: "No serious attacks yet: so far only scans and password guessing.",
+    fewer: "Fewer", more: "More (log scale)",
+    meta: (p, u) => `${p} · Updated ${u}`, period: (a, b) => `Data from ${a} to ${b}`, collecting: "Collecting data",
+    rep: { "Widely reported as malicious (score 50+)": "Widely reported as malicious (score 50+)",
+      "Some abuse reports (score 1-49)": "Some abuse reports (score 1-49)",
+      "No reports or whitelisted scanner (score 0)": "No reports or whitelisted scanner (score 0)", "Not checked": "Not checked" },
+    about: `<h3>What is this?</h3><p>Panal is a portfolio project: a decoy SSH server (Cowrie honeypot) on AWS, a data pipeline, and a local AI SOC analyst (qwen2.5:7b) that classifies every attack, maps it to MITRE ATT&amp;CK and writes incident reports.</p>
+      <h3>Is it safe?</h3><ul><li>Cowrie fakes a shell: nothing attackers type runs on a real system.</li><li>An egress firewall stops the honeypot from contacting anyone, so it can't be used to attack others.</li><li>Only aggregates are published: no IP addresses, no full commands, no session IDs.</li><li>Passwords shown are the ones bots tried against the decoy, not real credentials.</li></ul>
+      <h3>Can the AI be fooled?</h3><p>Attackers can type text meant to manipulate an AI analyst (prompt injection). In red-team tests the model alone was fooled 4/8 times; with deterministic guardrails, 0/8.</p>
+      <h3>Learn more</h3><p>Code, Sigma rules and methodology: <a href="https://github.com/Fabricioanchundia/IA-PANAL">github.com/Fabricioanchundia/IA-PANAL</a></p>`,
+  },
+  es: {
+    title: "¿Quién ataca a un servidor nuevo en internet?",
+    lead: "Un servidor SSH trampa en AWS registra cada ataque. Un analista SOC con IA local clasifica cada uno y lo mapea a MITRE ATT&CK.",
+    live: (a) => `Honeypot recolectando · último ataque ${a}`,
+    kpi: { sessions: "Sesiones de ataque", unique_ips: "IPs únicas", countries: "Países", login_attempts: "Intentos de login",
+      sessions_with_shell: "Entraron a la shell (falsa)", sigma_hits: "Alertas Sigma", ai_injection_attempts: "Intentaron engañar a la IA" },
+    tabs: { overview: "Resumen", feed: "Ataques en vivo", attackers: "Atacantes", detect: "Detección", activity: "Actividad", about: "Acerca de" },
+    mapTitle: "De dónde vienen los ataques", mapSub: "Sesiones por país (geolocalización de IP). Pasa el mouse por un país.",
+    funnelTitle: "¿Hasta dónde llegaron?", funnelSub: "Todas las sesiones, paso a paso",
+    countriesTitle: "Países principales", countriesSub: "Sesiones",
+    feedTitle: "Ataques en vivo", feedSub: "Últimas sesiones, clasificadas por el analista IA o por reglas. No se muestran IPs.",
+    serious: "Solo graves", all: "Todos",
+    repTitle: "¿Quiénes son?", repSub: "IPs atacantes según su reputación en AbuseIPDB",
+    clientsTitle: "Herramientas de ataque", clientsSub: "Software que usaron los bots para conectarse",
+    typesTitle: "Tipos de ataque", typesSub: "Sesiones por veredicto",
+    pwTitle: "Contraseñas más probadas", userTitle: "Usuarios más probados", botSub: "Probados por bots contra la trampa",
+    toolsTitle: "Comandos que ejecutaron", toolsSub: "Primer programa de cada comando",
+    mitreTitle: "Técnicas MITRE ATT&CK", mitreSub: "Sesiones con evidencia de cada técnica",
+    sigmaTitle: "Alertas de detección Sigma", sigmaSub: "Coincidencias por regla (reglas publicadas en el repo)",
+    timeTitle: "Actividad en el tiempo", perHour: "Sesiones por hora (UTC)", perDay: "Sesiones por día (UTC)",
+    funnel: ["Se conectaron a SSH", "Probaron una contraseña", "Entraron a la shell (falsa)", "Ejecutaron comandos", "Intentaron descargar malware"],
+    cat: { scan: "Escaneo", brute_force: "Adivinar contraseñas", recon: "Reconocimiento", malware_download: "Descarga de malware",
+      cryptominer: "Minero de criptomonedas", botnet: "Botnet", persistence: "Persistencia", pending_ai_review: "Actividad en shell", other: "Otro" },
+    sev: { low: "baja", medium: "media", high: "alta", critical: "crítica" },
+    from: (c) => `desde ${c}`, logins: (n) => `${n} login${n > 1 ? "s" : ""}`, cmds: (n) => `${n} comando${n > 1 ? "s" : ""}`,
+    byAi: "analista IA", byRules: "reglas", fool: "⚠ intentó engañar a la IA",
+    ago: (m) => m < 60 ? `hace ${m} min` : m < 2880 ? `hace ${Math.round(m / 60)} h` : `hace ${Math.round(m / 1440)} días`,
+    sessions: "sesiones", ips: "IPs únicas", noSessions: "Sin sesiones",
+    empty: "Aún no hay datos. Los bots suelen llegar en pocos días.", noSerious: "Aún no hay ataques graves: por ahora solo escaneos y adivinar contraseñas.",
+    fewer: "Menos", more: "Más (escala log)",
+    meta: (p, u) => `${p} · Actualizado ${u}`, period: (a, b) => `Datos del ${a} al ${b}`, collecting: "Recolectando datos",
+    rep: { "Widely reported as malicious (score 50+)": "Muy reportadas como maliciosas (score 50+)",
+      "Some abuse reports (score 1-49)": "Algunos reportes de abuso (score 1-49)",
+      "No reports or whitelisted scanner (score 0)": "Sin reportes o escáner en lista blanca (score 0)", "Not checked": "Sin revisar" },
+    about: `<h3>¿Qué es esto?</h3><p>Panal es un proyecto de portafolio: un servidor SSH trampa (honeypot Cowrie) en AWS, un pipeline de datos y un analista SOC con IA local (qwen2.5:7b) que clasifica cada ataque, lo mapea a MITRE ATT&amp;CK y escribe reportes de incidentes.</p>
+      <h3>¿Es seguro?</h3><ul><li>Cowrie simula una terminal: nada de lo que escriben los atacantes se ejecuta en un sistema real.</li><li>Un firewall de salida impide que el honeypot contacte a nadie, así no puede usarse para atacar a otros.</li><li>Solo se publican totales: sin IPs, sin comandos completos, sin IDs de sesión.</li><li>Las contraseñas que se ven son las que probaron los bots contra la trampa, no credenciales reales.</li></ul>
+      <h3>¿Se puede engañar a la IA?</h3><p>Los atacantes pueden escribir texto para manipular a un analista IA (prompt injection). En pruebas de red team el modelo solo fue engañado 4 de 8 veces; con guardrails deterministas, 0 de 8.</p>
+      <h3>Más información</h3><p>Código, reglas Sigma y metodología: <a href="https://github.com/Fabricioanchundia/IA-PANAL">github.com/Fabricioanchundia/IA-PANAL</a></p>`,
+  },
+};
+const TABS = ["overview", "feed", "attackers", "detect", "activity", "about"];
+const SEV_ICON = { low: "○", medium: "◐", high: "▲", critical: "■" };
+const store = { get(k) { try { return localStorage.getItem(k); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} } };
+let lang = store.get("panal-lang") || (navigator.language.startsWith("es") ? "es" : "en");
+let tab = TABS.includes(location.hash.slice(1)) ? location.hash.slice(1) : "overview";
+let filter = null, data = null, world = null;
+
+const fmt = new Intl.NumberFormat("en-US");
+const tip = document.getElementById("tip");
+const css = (n) => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const t = () => T[lang];
+function cname(code, fallback) {
+  if (!code || code === "ZZ") return lang === "es" ? "Desconocido" : "Unknown";
+  try { return new Intl.DisplayNames([lang], { type: "region" }).of(code) || fallback; } catch { return fallback; }
+}
+const minutesSince = (iso) => Math.max(0, Math.round((Date.now() - Date.parse(iso)) / 60000));
+function showTip(e, html) { tip.innerHTML = html; tip.style.opacity = 1;
+  tip.style.left = Math.min(e.clientX + 12, innerWidth - tip.offsetWidth - 8) + "px"; tip.style.top = (e.clientY + 14) + "px"; }
+function hideTip() { tip.style.opacity = 0; }
+
+function bars(id, rows, { label, value, code = false, extra = () => "", hover = () => "", limit = 8 }) {
+  const el = document.getElementById(id);
+  rows = rows.slice(0, limit);
+  if (!rows.length) { el.innerHTML = `<div class="empty">${t().empty}</div>`; return; }
+  const max = Math.max(...rows.map(value));
+  el.innerHTML = rows.map((r, i) => `<div class="bar-row" data-i="${i}">
+      <span class="lab" title="${esc(label(r))}">${code ? `<code>${esc(label(r))}</code>` : esc(label(r))}${extra(r)}</span>
+      <span class="track"><span class="fill" style="width:${(value(r) / max) * 100}%"></span></span>
+      <span class="num">${fmt.format(value(r))}</span></div>`).join("");
+  el.querySelectorAll(".bar-row").forEach((row) => {
+    const h = hover(rows[+row.dataset.i]);
+    if (h) { row.addEventListener("mousemove", (e) => showTip(e, h)); row.addEventListener("mouseleave", hideTip); }
+  });
+}
+
+function renderStatic() {
+  document.documentElement.lang = lang;
+  document.querySelectorAll("[data-i]").forEach((el) => { el.textContent = t()[el.dataset.i]; });
+  document.querySelectorAll(".lang button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.lang === lang));
+  document.getElementById("filters").setAttribute("aria-label", t().tabs.feed);
+  document.querySelectorAll("#filters button").forEach((b) => { b.textContent = t()[b.dataset.f]; });
+  document.getElementById("about").innerHTML = t().about;
+}
+
+function renderTabs() {
+  const serious = data ? data.recent.filter((r) => r.severity !== "low").length : 0;
+  document.getElementById("tabs").innerHTML = TABS.map((k) => `<button role="tab" id="tab-${k}" data-tab="${k}"
+    aria-selected="${k === tab}" aria-controls="p-${k}" tabindex="${k === tab ? 0 : -1}">${t().tabs[k]}${
+      k === "feed" && serious ? `<span class="badge">${serious}</span>` : ""}</button>`).join("");
+  TABS.forEach((k) => { document.getElementById(`p-${k}`).hidden = k !== tab; });
+}
+
+function kpis(s) {
+  document.getElementById("kpis").innerHTML = Object.entries(t().kpi).map(([k, l]) =>
+    `<div class="kpi"><div class="v">${fmt.format(s.totals[k] ?? 0)}</div><div class="l">${l}</div></div>`).join("");
+  const p = s.period, u = s.generated_at.replace("T", " ").replace("Z", " UTC");
+  document.getElementById("meta").textContent = t().meta(p.start ? t().period(p.start, p.end) : t().collecting, u);
+  if (s.last_attack_at) {
+    document.getElementById("live").hidden = false;
+    document.getElementById("live-text").textContent = t().live(t().ago(minutesSince(s.last_attack_at)));
+  }
+}
+
+function funnel(f) {
+  const keys = ["connected", "tried_login", "got_shell", "ran_commands", "tried_download"], total = f.connected || 1;
+  document.getElementById("funnel").innerHTML = keys.map((k, i) => {
+    const pct = Math.round((f[k] / total) * 100);
+    return `<div class="step"><div class="row"><span>${t().funnel[i]}</span><span><b>${fmt.format(f[k])}</b> <span class="pct">· ${pct}%</span></span></div>
+      <div class="track"><div class="fill" style="width:${f[k] ? Math.max(pct, 1) : 0}%"></div></div></div>`;
+  }).join("");
+}
+
+function feed() {
+  const el = document.getElementById("recent");
+  if (!filter) filter = data.recent.some((r) => r.severity !== "low") ? "serious" : "all";
+  document.querySelectorAll("#filters button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.f === filter));
+  const rows = filter === "serious" ? data.recent.filter((r) => r.severity !== "low") : data.recent;
+  if (!rows.length) { el.innerHTML = `<div class="empty">${filter === "serious" ? t().noSerious : t().empty}</div>`; return; }
+  el.innerHTML = rows.map((r) => {
+    const chips = [
+      ...r.techniques.map((x) => `<span class="chip">${esc(x)}</span>`),
+      r.logins ? `<span class="chip t">${t().logins(r.logins)}</span>` : "",
+      r.commands ? `<span class="chip t">${t().cmds(r.commands)}</span>` : "",
+      r.client !== "Unknown" ? `<span class="chip">${esc(r.client)}</span>` : "",
+      `<span class="chip t">${r.by === "ai" ? t().byAi : t().byRules}</span>`,
+      r.injection ? `<span class="chip warn">${t().fool}</span>` : "",
+    ].join("");
+    return `<div class="item"><div class="when" title="${esc(r.time.replace("T", " ").replace(":00Z", " UTC"))}">${t().ago(minutesSince(r.time))}</div>
+      <div class="what"><span class="cat">${esc(t().cat[r.category] || r.category)}</span>
+        <span class="sev ${esc(r.severity)}"><span aria-hidden="true">${SEV_ICON[r.severity] || ""}</span>${esc(t().sev[r.severity] || r.severity)}</span>
+        <span class="where">${esc(t().from(cname(r.country_code, r.country)))}</span></div>
+      <div class="chips">${chips}</div></div>`;
+  }).join("");
+}
+
+function cards(s) {
+  bars("countries", s.countries, { label: (r) => cname(r.code, r.name), value: (r) => r.sessions, limit: 6,
+    hover: (r) => `<b>${esc(cname(r.code, r.name))}</b><br>${fmt.format(r.sessions)} ${t().sessions} · ${fmt.format(r.ips)} ${t().ips}` });
+  bars("reputation", s.reputation, { label: (r) => t().rep[r.label] || r.label, value: (r) => r.count });
+  bars("clients", s.clients, { label: (r) => r.label, value: (r) => r.count, code: true });
+  bars("categories", s.categories, { label: (r) => t().cat[r.label] || r.label, value: (r) => r.count });
+  bars("passwords", s.top_passwords, { label: (r) => r.label, value: (r) => r.count, code: true });
+  bars("usernames", s.top_usernames, { label: (r) => r.label, value: (r) => r.count, code: true });
+  bars("tools", s.top_tools, { label: (r) => r.label, value: (r) => r.count, code: true });
+  bars("techniques", s.techniques, { label: (r) => `${r.id} ${r.name}`, value: (r) => r.sessions, limit: 16,
+    hover: (r) => `<b>${esc(r.id)}</b> ${esc(r.name)}<br>${esc(r.tactic)}` });
+  bars("sigma", s.sigma, { label: (r) => r.title, value: (r) => r.hits,
+    extra: (r) => `<span class="pill ${esc(r.level)}">${esc(t().sev[r.level] || r.level)}</span>` });
+}
+
+function drawMap() {
+  const el = document.getElementById("map");
+  if (!world || !el.clientWidth) return;
+  el.innerHTML = "";
+  const features = topojson.feature(world, world.objects.countries).features.filter((f) => f.properties.name !== "Antarctica");
+  const byNum = new Map(data.countries.filter((c) => c.numeric).map((c) => [c.numeric, c]));
+  const max = d3.max(data.countries.filter((c) => c.numeric), (c) => c.sessions) || 1;
+  const ramp = [1, 2, 3, 4].map((i) => css(`--ramp-${i}`));
+  const color = d3.scaleQuantize().domain([0, Math.log10(max + 1)]).range(ramp);
+  const w = el.clientWidth, h = Math.max(200, el.clientHeight);
+  const path = d3.geoPath(d3.geoNaturalEarth1().fitSize([w, h], { type: "FeatureCollection", features }));
+  d3.select(el).append("svg").attr("viewBox", `0 0 ${w} ${h}`).attr("role", "img").attr("aria-label", t().mapTitle)
+    .append("g").selectAll("path").data(features).join("path").attr("class", "country").attr("d", path)
+    .attr("fill", (f) => byNum.has(f.id) ? color(Math.log10(byNum.get(f.id).sessions + 1)) : css("--land"))
+    .on("mousemove", (e, f) => { const c = byNum.get(f.id);
+      showTip(e, c ? `<b>${esc(cname(c.code, c.name))}</b><br>${fmt.format(c.sessions)} ${t().sessions} · ${fmt.format(c.ips)} ${t().ips}`
+                   : `<b>${esc(f.properties.name)}</b><br>${t().noSessions}`); })
+    .on("mouseleave", hideTip);
+  document.getElementById("legend").innerHTML =
+    `${t().fewer} <span class="scale">${ramp.map((c) => `<span style="background:${c}"></span>`).join("")}</span> ${t().more}`;
+}
+
+function drawTimeline() {
+  const el = document.getElementById("timeline");
+  if (!el.clientWidth) return;
+  el.innerHTML = "";
+  const hourly = data.hourly;
+  if (!hourly.length) { el.innerHTML = `<div class="empty">${t().empty}</div>`; return; }
+  const parse = (x) => new Date(x + ":00:00Z");
+  const start = parse(hourly[0].hour), end = parse(hourly[hourly.length - 1].hour);
+  const byDay = (end - start) / 3600000 > 72, unit = byDay ? d3.utcDay : d3.utcHour;
+  const key = (d) => byDay ? d.toISOString().slice(0, 10) : d.toISOString().slice(0, 13);
+  const counts = d3.rollup(hourly, (v) => d3.sum(v, (d) => d.sessions), (d) => byDay ? d.hour.slice(0, 10) : d.hour);
+  const rows = unit.range(unit.floor(start), unit.offset(unit.floor(end), 1)).map((d) => ({ k: key(d), n: counts.get(key(d)) || 0 }));
+  document.getElementById("timeline-sub").textContent = byDay ? t().perDay : t().perHour;
+  const w = el.clientWidth, h = Math.max(200, el.clientHeight), m = { t: 8, r: 8, b: 26, l: 32 };
+  const svg = d3.select(el).append("svg").attr("width", w).attr("height", h).attr("role", "img").attr("aria-label", t().timeTitle);
+  const x = d3.scaleBand().domain(rows.map((d) => d.k)).range([m.l, w - m.r]).padding(0.2);
+  const y = d3.scaleLinear().domain([0, d3.max(rows, (d) => d.n) || 1]).nice().range([h - m.b, m.t]);
+  svg.append("g").attr("class", "axis").attr("transform", `translate(${m.l},0)`)
+    .call(d3.axisLeft(y).ticks(5).tickSize(-(w - m.l - m.r)).tickFormat(d3.format("~s"))).call((g) => g.select(".domain").remove());
+  const label = (k) => byDay ? k.slice(5) : `${k.slice(5, 10)} ${k.slice(11)}h`;
+  const every = Math.ceil(rows.length / Math.max(4, Math.floor(w / 90)));
+  svg.append("g").attr("class", "axis").attr("transform", `translate(0,${h - m.b})`)
+    .call(d3.axisBottom(x).tickValues(rows.filter((_, i) => i % every === 0).map((d) => d.k)).tickFormat(label).tickSize(0))
+    .call((g) => g.select(".domain").remove());
+  const bw = Math.min(x.bandwidth(), 36), r = Math.min(4, bw / 2);
+  svg.append("g").selectAll("path").data(rows.filter((d) => d.n)).join("path").attr("class", "col").attr("d", (d) => {
+    const x0 = x(d.k) + (x.bandwidth() - bw) / 2, y0 = y(d.n), y1 = y(0), rr = Math.min(r, y1 - y0);
+    return `M${x0},${y1}V${y0 + rr}Q${x0},${y0} ${x0 + rr},${y0}H${x0 + bw - rr}Q${x0 + bw},${y0} ${x0 + bw},${y0 + rr}V${y1}Z`; });
+  svg.append("g").selectAll("rect").data(rows).join("rect").attr("fill", "transparent")
+    .attr("x", (d) => x(d.k)).attr("width", x.step()).attr("y", m.t).attr("height", h - m.b - m.t)
+    .on("mousemove", (e, d) => showTip(e, `<b>${esc(label(d.k))}</b><br>${fmt.format(d.n)} ${t().sessions}`)).on("mouseleave", hideTip);
+}
+
+function render() {
+  renderStatic(); renderTabs();
+  if (!data) return;
+  kpis(data); funnel(data.funnel); feed(); cards(data);
+  if (tab === "overview") drawMap();
+  if (tab === "activity") drawTimeline();
+}
+
+document.querySelector(".lang").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return; lang = b.dataset.lang; store.set("panal-lang", lang); render(); });
+document.getElementById("tabs").addEventListener("click", (e) => {
+  const b = e.target.closest("[data-tab]"); if (!b) return; tab = b.dataset.tab; history.replaceState(null, "", "#" + tab); render(); });
+document.getElementById("tabs").addEventListener("keydown", (e) => {
+  if (!["ArrowRight", "ArrowLeft"].includes(e.key)) return;
+  tab = TABS[(TABS.indexOf(tab) + (e.key === "ArrowRight" ? 1 : TABS.length - 1)) % TABS.length];
+  history.replaceState(null, "", "#" + tab); render(); document.getElementById(`tab-${tab}`).focus(); });
+document.getElementById("filters").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return; filter = b.dataset.f; feed(); });
+addEventListener("hashchange", () => {
+  const h = location.hash.slice(1); if (TABS.includes(h) && h !== tab) { tab = h; render(); } });
+let resizeTimer; addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => {
+  if (tab === "overview") drawMap(); if (tab === "activity") drawTimeline(); }, 150); });
+
+render();
+(async () => {
+  data = await (await fetch("data/summary.json", { cache: "no-store" })).json();
+  render();
+  try { world = await d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2.0.2/countries-110m.json"); drawMap(); }
+  catch { document.getElementById("map").innerHTML = '<div class="empty">Map unavailable.</div>'; }
+})();
+</script>
+</body>
+</html>
