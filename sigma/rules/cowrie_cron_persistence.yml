@@ -1,0 +1,28 @@
+title: Cron Persistence via Remote Script
+id: 0252b3cd-5d8b-454f-b6ad-182cb1a19383
+status: experimental
+description: Attacker installs a cron job that downloads and runs a remote script.
+references:
+    - https://github.com/Fabricioanchundia/IA-PANAL
+author: Fabricio Anchundia
+date: 2026-11-07
+tags:
+    - attack.persistence
+    - attack.t1053.003
+logsource:
+    product: cowrie
+    service: ssh
+detection:
+    selection_cron:
+        eventid: cowrie.command.input
+        input|contains:
+            - crontab
+            - /etc/cron
+    selection_fetch:
+        input|contains:
+            - 'curl'
+            - 'wget'
+    condition: selection_cron and selection_fetch
+falsepositives:
+    - Configuration management tools scheduling updates
+level: high

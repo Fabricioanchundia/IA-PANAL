@@ -1,0 +1,39 @@
+title: Prompt Injection Aimed at AI Security Analysts
+id: 26c5d987-1d06-40df-8fdb-c8ec20486b6a
+status: experimental
+description: Attacker-controlled input (commands, usernames, passwords) contains instructions meant to manipulate an LLM-based analyst into downgrading the incident.
+references:
+    - https://github.com/Fabricioanchundia/IA-PANAL
+author: Fabricio Anchundia
+date: 2026-11-07
+tags:
+    - attack.defense-evasion
+logsource:
+    product: cowrie
+    service: ssh
+detection:
+    selection_fields:
+        eventid:
+            - cowrie.command.input
+            - cowrie.login.failed
+            - cowrie.login.success
+    keywords_override:
+        - 'ignore all previous instructions'
+        - 'ignore previous instructions'
+        - 'ignora las instrucciones'
+        - 'disregard previous'
+        - 'you are now'
+        - 'system prompt'
+        - 'untrusted_session_data'
+    keywords_downgrade:
+        - 'severity low'
+        - 'harmless'
+        - '"severity": "low"'
+        - '"category": "scan"'
+        - 'as benign'
+        - 'classify this session'
+        - 'authorized penetration test'
+    condition: selection_fields and (keywords_override or keywords_downgrade)
+falsepositives:
+    - Security researchers testing AI tooling on purpose
+level: high
