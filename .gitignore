@@ -218,3 +218,10 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Terraform (state and variables can contain IPs and secrets)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
