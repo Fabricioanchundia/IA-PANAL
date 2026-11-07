@@ -22,6 +22,7 @@ from typing import Any
 import duckdb
 
 from panal.attack import CATALOG, evidence_for
+from panal.guard import apply_guardrails, detect_injection
 from panal.ingest import load
 
 OLLAMA_URL = "http://localhost:11434/api/chat"
@@ -148,20 +149,27 @@ def build_prompt(facts: dict[str, Any]) -> str:
     return f"<untrusted_session_data>\n{blob}\n</untrusted_session_data>"
 
 
-def validate(raw: dict[str, Any], evidence_ids: list[str]) -> tuple[dict[str, Any], list[str]]:
-    """Clamp the model output to allowed values. Returns (clean, hallucinated technique IDs)."""
-    proposed = [str(t).strip().upper() for t in raw.get("techniques", [])]
+def validate(
+    raw: dict[str, Any], evidence_ids: list[str]
+) -> tuple[dict[str, Any], list[str], list[str]]:
+    """Clamp the model output to allowed values.
+
+    Returns (clean, hallucinated, unsupported): hallucinated IDs are not in the catalog;
+    unsupported IDs are real techniques the model proposed without evidence in the logs.
+    Only evidence-backed techniques make it into the result.
+    """
+    proposed = list(dict.fromkeys(str(t).strip().upper() for t in raw.get("techniques", [])))
     hallucinated = [t for t in proposed if t not in CATALOG]
-    techniques = list(dict.fromkeys(evidence_ids + [t for t in proposed if t in CATALOG]))
+    unsupported = [t for t in proposed if t in CATALOG and t not in evidence_ids]
     recommendations = [str(r) for r in raw.get("recommendations", []) if str(r).strip()][:4]
     clean = {
         "category": raw.get("category") if raw.get("category") in CATEGORIES else "other",
         "severity": raw.get("severity") if raw.get("severity") in SEVERITIES else "medium",
-        "techniques": techniques,
+        "techniques": list(evidence_ids),
         "summary": str(raw.get("summary", "")).strip(),
         "recommendations": recommendations,
     }
-    return clean, hallucinated
+    return clean, hallucinated, unsupported
 
 
 def triage_without_llm(facts: dict[str, Any]) -> dict[str, Any] | None:
@@ -200,14 +208,23 @@ def ensure_table(con: duckdb.DuckDBPyConnection) -> None:
             recommendations VARCHAR[], latency_ms BIGINT, analyzed_at TIMESTAMPTZ)
         """
     )
+    for column, kind in (
+        ("unsupported", "VARCHAR[]"),
+        ("injection", "VARCHAR[]"),
+        ("overrides", "VARCHAR[]"),
+        ("raw_category", "VARCHAR"),
+        ("raw_severity", "VARCHAR"),
+    ):
+        con.execute(f"ALTER TABLE analyses ADD COLUMN IF NOT EXISTS {column} {kind}")
 
 
 def analyze_session(
-    con: duckdb.DuckDBPyConnection, session: str, llm: Llm, model: str
+    con: duckdb.DuckDBPyConnection, session: str, llm: Llm, model: str, guard: bool = True
 ) -> dict[str, Any]:
     facts = session_facts(con, session)
     evidence = evidence_for(facts["failed_logins"], facts["successful_logins"], facts["commands"])
     evidence_ids = [e.technique for e in evidence]
+    injection = detect_injection(facts["commands"] + facts["usernames"] + facts["passwords"])
 
     started = time.perf_counter()
     raw = triage_without_llm(facts)
@@ -216,12 +233,23 @@ def analyze_session(
         raw = llm(SYSTEM_PROMPT, build_prompt(facts), SCHEMA)
         used_model = model
     raw.setdefault("techniques", [])
-    result, hallucinated = validate(raw, evidence_ids)
+    result, hallucinated, unsupported = validate(raw, evidence_ids)
+    raw_category, raw_severity = result["category"], result["severity"]
+    overrides: list[str] = []
+    if guard:
+        has_shell = bool(facts["commands"])
+        result, overrides = apply_guardrails(result, evidence_ids, has_shell, bool(injection))
     latency_ms = round((time.perf_counter() - started) * 1000)
 
     ensure_table(con)
     con.execute(
-        "INSERT OR REPLACE INTO analyses VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now())",
+        """
+        INSERT OR REPLACE INTO analyses
+            (session, model, category, severity, techniques, hallucinated, summary,
+             recommendations, latency_ms, analyzed_at, unsupported, injection, overrides,
+             raw_category, raw_severity)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, now(), ?, ?, ?, ?, ?)
+        """,
         [
             session,
             used_model,
@@ -232,6 +260,11 @@ def analyze_session(
             result["summary"],
             result["recommendations"],
             latency_ms,
+            unsupported,
+            injection,
+            overrides,
+            raw_category,
+            raw_severity,
         ],
     )
     return {
@@ -239,6 +272,11 @@ def analyze_session(
         "facts": facts,
         "evidence": evidence,
         "hallucinated": hallucinated,
+        "unsupported": unsupported,
+        "injection": injection,
+        "overrides": overrides,
+        "raw_category": raw_category,
+        "raw_severity": raw_severity,
         "model": used_model,
         "latency_ms": latency_ms,
     }
@@ -257,20 +295,38 @@ def render_report(analysis: dict[str, Any]) -> str:
         f"| SSH client | `{f['client_version'] or 'unknown'}` |",
         f"| Category | **{analysis['category']}** |",
         f"| Severity | **{analysis['severity'].upper()}** |",
-        "",
-        "## Summary",
-        "",
-        analysis["summary"] or "_No summary._",
-        "",
-        "## MITRE ATT&CK",
-        "",
-        "| ID | Technique | Tactic | Evidence |",
-        "|---|---|---|---|",
     ]
+    if analysis["injection"]:
+        lines += [
+            "",
+            "> **Prompt injection attempt detected.** The attacker sent text aimed at an AI "
+            "analyst. It was treated as evidence, not as instructions:",
+            ">",
+        ]
+        lines += [f"> - `{t[:120]}`" for t in analysis["injection"]]
+    if analysis["overrides"]:
+        lines += ["", "**Guardrail overrides** (the model's answer was corrected):", ""]
+        lines += [f"- {o}" for o in analysis["overrides"]]
+    lines += ["", "## Summary", ""]
+    if analysis["overrides"]:
+        lines += [
+            "_The model's verdict was overridden, so this summary may have been "
+            "influenced by the attacker. Trust the evidence below._",
+            "",
+        ]
+    lines += [analysis["summary"] or "_No summary._", ""]
+    lines += ["## MITRE ATT&CK", "", "| ID | Technique | Tactic | Evidence |", "|---|---|---|---|"]
     for t in analysis["techniques"]:
         name, tactic = CATALOG[t]
         evidence = reasons.get(t, "model assessment").replace("|", "\\|")
         lines.append(f"| {t} | {name} | {tactic} | {evidence} |")
+    if analysis["unsupported"]:
+        lines += [
+            "",
+            "_Suggested by the model without evidence (not counted): "
+            + ", ".join(analysis["unsupported"])
+            + "._",
+        ]
     lines += ["", "## Timeline", ""]
     lines += [f"{i}. `{c}`" for i, c in enumerate(f["commands"], 1)] or ["_No commands._"]
     lines += ["", "## Indicators of compromise", "", f"- IP: `{f['src_ip']}`"]
@@ -282,7 +338,8 @@ def render_report(analysis: dict[str, Any]) -> str:
         "",
         "---",
         f"_Generated by Panal ({analysis['model']}, {analysis['latency_ms']} ms). Facts come "
-        "from honeypot logs; the model only classifies and summarizes._",
+        "from honeypot logs; the model only classifies and summarizes, and deterministic "
+        "guardrails can override it._",
     ]
     return "\n".join(lines) + "\n"
 
@@ -322,7 +379,11 @@ def main() -> None:
     for session in pending_sessions(con, args.limit):
         a = analyze_session(con, session, llm, args.model)
         (out_dir / f"{session}.md").write_text(render_report(a))
-        flag = f"  hallucinated: {a['hallucinated']}" if a["hallucinated"] else ""
+        flags = [f"hallucinated={a['hallucinated']}"] if a["hallucinated"] else []
+        flags += [f"unsupported={a['unsupported']}"] if a["unsupported"] else []
+        flags += ["INJECTION"] if a["injection"] else []
+        flags += [f"guard: {o}" for o in a["overrides"]]
+        flag = "\n" + "\n".join(f"{'':16}{x}" for x in flags) if flags else ""
         print(
             f"{session:<14} {a['severity']:<8} {a['category']:<17} "
             f"{','.join(a['techniques'])}  ({a['model']}, {a['latency_ms']} ms){flag}"
