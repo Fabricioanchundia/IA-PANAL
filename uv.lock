@@ -578,7 +578,7 @@ wheels = [
 
 [[package]]
 name = "pysigma"
-version = "2.0.2"
+version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "diskcache-community" },
@@ -591,9 +591,9 @@ dependencies = [
     { name = "requests" },
     { name = "types-pyyaml" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/67/94/2463945ca70f2d5135768c1898545a0df85586d1b0e66cc1842a649134b7/pysigma-2.0.2.tar.gz", hash = "sha256:c8fac45d24adfa14aeebcbab95929066116b2dbcc0816498066af56dda039832", size = 154540, upload-time = "2026-11-01T19:18:02.244Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f9/1e/4d5d0bac0fba32895222f0d01217629b0057e983f3ebd2bd3b9eeb6a8ae9/pysigma-2.1.0.tar.gz", hash = "sha256:b800923786ace5bc90bd35f488d81b7a2b86e04856f213f5de52c05f876901d1", size = 163103, upload-time = "2026-11-09T23:19:13.516Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/e8/c0/de77e7cbf0b8d9ee161d8a5206c7b5ef56d5fb98caa1e660f14e0e0002ff/pysigma-2.0.2-py3-none-any.whl", hash = "sha256:8fb128597a5d3812219d4dd17c76426bc480ea9875325c5eeeac114d6d8ebbec", size = 186061, upload-time = "2026-11-01T19:18:00.631Z" },
+    { url = "https://files.pythonhosted.org/packages/bb/c6/b7cde993ae35ecbd5d36d2d7a94637cdd070332fb74ff8b308772633ab73/pysigma-2.1.0-py3-none-any.whl", hash = "sha256:3495dcfff8aaefc81f9249a6ebdb3ef823ca84bfa32fa0a8f0ef0421049cced4", size = 197899, upload-time = "2026-11-09T23:19:11.675Z" },
 ]
 
 [[package]]
